@@ -220,6 +220,72 @@ module Larch
             next
           end
 
+          passes_sender_filter, senders = message_passes_sender_filter(msg, @config['senders'])
+          passes_recipient_filter, recipients = message_passes_recipient_filter(msg, @config['recipients'])
+
+          if @config['senders'] && @config['recipients']
+            # ok if either sender or recipient filter matches.
+            passes_sender_filter, senders = message_passes_sender_filter(msg, @config['senders'])
+            passes_recipient_filter, recipients = message_passes_recipient_filter(msg, @config['recipients'])
+            if !(passes_sender_filter || passes_recipient_filter)
+              @log.info (!passes_sender_filter)? "[<] ignoring email with senders #{senders}" : "[<] ignoring email with recipients #{recipients}"
+              next
+            end
+          end
+
+          if @config['senders'] && !@config['recipients']
+            # sender filter must match.
+            passes_sender_filter, senders = message_passes_sender_filter(msg, @config['senders'])
+            if !passes_sender_filter
+              @log.info "[<] ignoring email with senders #{senders}"
+              next
+            end
+          end
+
+          if !@config['senders'] && @config['recipients']
+            # recipient filter must match.
+            passes_recipient_filter, recipients = message_passes_recipient_filter(msg, @config['recipients'])
+            if !passes_recipient_filter
+              @log.info "[<] ignoring email with recipients #{recipients}"
+              next
+            end
+          end
+
+          # if @config['senders']
+          #   if @config['recipients']
+          #     passes_sender_filter, senders = message_passes_sender_filter(msg, @config['senders'])
+          #     passes_recipient_filter, recipients = message_passes_recipient_filter(msg, @config['recipients'])
+          #     if !(passes_sender_filter || passes_recipient_filter)
+          #       @log.info (!passes_sender_filter)? "[<] ignoring email with senders #{senders}" : "[<] ignoring email with recipients #{recipients}"
+          #       next
+          #     end
+          #   else
+          #     passes_sender_filter, senders = message_passes_sender_filter(msg, @config['senders'])
+          #     if !passes_sender_filter
+          #       @log.info "[<] ignoring email with senders #{senders}"
+          #       next
+          #     end
+          #   end
+          # else
+          #   if @config['recipients']
+          #     passes_recipient_filter, recipients = message_passes_recipient_filter(msg, @config['recipients'])
+          #     if !passes_recipient_filter
+          #       @log.info "[<] ignoring email with recipients #{recipients}"
+          #       next
+          #     end
+          #   end
+          # end
+
+          # if @config['senders'] && !(senders = message_senders(msg)).any? {|e1| @config['senders'].find {|e2| Regexp.new(e2).match(e1)}}
+          #   @log.info "[<] ignoring email with senders #{senders}"
+          #   next
+          # end
+
+          # if @config['recipients'] && !(recipients = message_recipients(msg)).any? {|e1| @config['recipients'].find {|e2| Regexp.new(e2).match(e1)}}
+          #   @log.info "[<] ignoring email with recipients #{recipients}"
+          #   next
+          # end
+
           if msg.envelope.from
             env_from = msg.envelope.from.first
             from = "#{env_from.mailbox}@#{env_from.host}"
@@ -322,6 +388,22 @@ module Larch
 
       load_exclude_file(@config[:exclude_file]) if @config[:exclude_file]
     end
+
+    def message_passes_sender_filter(msg, sender_filter)
+      message_senders = (msg.envelope.from.nil?)? [] : msg.envelope.from.map { |e| "#{e.mailbox}@#{e.host}" }
+
+      return (sender_filter && message_senders.any? {|e1| sender_filter.find {|e2| Regexp.new(e2).match(e1)}}), message_senders
+    end
+
+    def message_passes_recipient_filter(msg, recipient_filter)
+      message_recipients = []
+      message_recipients.concat(msg.envelope.to.map { |e| "#{e.mailbox}@#{e.host}" }) unless msg.envelope.to.nil?
+      message_recipients.concat(msg.envelope.cc.map { |e| "#{e.mailbox}@#{e.host}" }) unless msg.envelope.cc.nil?
+      message_recipients.concat(msg.envelope.bcc.map { |e| "#{e.mailbox}@#{e.host}" }) unless msg.envelope.bcc.nil?
+      
+      return (recipient_filter && message_recipients.any? {|e1| recipient_filter.find {|e2| Regexp.new(e2).match(e1)}}), message_recipients
+    end
+
   end
 
 end
